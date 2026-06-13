@@ -39,23 +39,23 @@ and `Queue` systems — driver-based, config-driven, and swappable at runtime.
 
 ````php
 // Pay with Paystack today
-Fintech::payment()->initializeTransaction($data);
+NgFintech::payment()->initializeTransaction($data);
 
 // Switch to Flutterwave tomorrow — zero app code changes
 // Just update FINTECH_PAYMENT_DRIVER=flutterwave in .env
-Fintech::payment()->initializeTransaction($data);
+NgFintech::payment()->initializeTransaction($data);
 
 // Verify BVN
-Fintech::identity()->verifyBvn($bvn);
+NgFintech::identity()->verifyBvn($bvn);
 
 // Pay DSTV subscription
-Fintech::bills()->payBill(['biller_code' => 'dstv', ...]);
+NgFintech::bills()->payBill(['biller_code' => 'dstv', ...]);
 
 // Buy MTN airtime
-Fintech::airtime()->purchaseAirtime(['phone' => '08012345678', 'amount' => 1000]);
+NgFintech::airtime()->purchaseAirtime(['phone' => '08012345678', 'amount' => 1000]);
 
 // Get account statement via open banking
-Fintech::banking()->getAccountStatement($monoId);
+NgFintech::banking()->getAccountStatement($monoId);
 ````
 
 ---
