@@ -38,6 +38,7 @@
                 "SeyiAjibola\\NgFintech\\Services\\FintechServiceProvider"
             ],
             "aliases": {
+                "NgFintech": "SeyiAjibola\\NgFintech\\Facades\\NgFintech",
                 "NgPayment": "SeyiAjibola\\NgFintech\\Facades\\Payment",
                 "NgAirtime": "SeyiAjibola\\NgFintech\\Facades\\Airtime",
                 "NgBills": "SeyiAjibola\\NgFintech\\Facades\\Bills",

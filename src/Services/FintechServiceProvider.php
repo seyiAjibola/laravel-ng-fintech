@@ -13,15 +13,17 @@ class FintechServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Merge our config with the app's config.
-        // This means if the user hasn't published config, defaults still work.
         $this->mergeConfigFrom(
             __DIR__ . '/../../config/fintech.php',
             'fintech'
         );
 
-        // Bind the FintechManager as a singleton.
-        // Singleton = one shared instance throughout the app lifecycle.
+        // Master registry — powers NgFintech::payment(), NgFintech::airtime() etc
+        $this->app->singleton('ngfintech', function ($app) {
+            return new \SeyiAjibola\NgFintech\NgFintechRegistry();
+        });
+
+        // Individual managers — still available directly
         $this->app->singleton('fintech.payment', function ($app) {
             return new FintechManager($app, 'payment');
         });
@@ -68,6 +70,7 @@ class FintechServiceProvider extends ServiceProvider
     public function provides(): array
     {
         return [
+            'ngfintech',
             'fintech.payment',
             'fintech.airtime',
             'fintech.bills',
