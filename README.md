@@ -356,7 +356,7 @@ php artisan test
 
 ## Author
 
-**Seyi Ojo** — Senior Laravel Engineer, Lagos Nigeria 🇳🇬
+**Seyi Ajibola Ojo** — Senior Laravel Engineer, Lagos Nigeria 🇳🇬
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-seyiojo-0077B5?logo=linkedin)](https://linkedin.com/in/seyiojo)
 [![GitHub](https://img.shields.io/badge/GitHub-seyiAjibola-181717?logo=github)](https://github.com/seyiAjibola)
