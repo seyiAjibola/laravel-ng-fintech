@@ -43,6 +43,11 @@ class FintechServiceProvider extends ServiceProvider
         $this->app->singleton('fintech.banking', function ($app) {
             return new FintechManager($app, 'banking');
         });
+
+        // Transaction logger — available anywhere via app(TransactionLogger::class)
+        $this->app->singleton(TransactionLogger::class, function () {
+            return new TransactionLogger();
+        });
     }
 
     /**

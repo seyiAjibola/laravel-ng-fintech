@@ -140,4 +140,15 @@ return [
         'default' => env('FINTECH_BANKING_DRIVER', 'paystack'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Transaction Logging
+    |--------------------------------------------------------------------------
+    | Controls whether API calls are logged to the database.
+    | Disable in testing environments or if you handle logging yourself.
+    */
+    'logging' => [
+        'enabled' => env('FINTECH_LOGGING_ENABLED', true),
+    ],
+
 ];

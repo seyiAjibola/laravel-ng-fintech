@@ -6,17 +6,19 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use SeyiAjibola\NgFintech\Contracts\PaymentProvider;
 use SeyiAjibola\NgFintech\Exceptions\FintechException;
+use SeyiAjibola\NgFintech\Services\TransactionLogger;
 
 class PaystackDriver implements PaymentProvider
 {
     protected Client $client;
     protected array $config;
+    protected TransactionLogger $logger;
 
     public function __construct(array $config)
     {
         $this->config = $config;
+        $this->logger = app(TransactionLogger::class);
 
-        // Boot the HTTP client once — reused for all calls
         $this->client = new Client([
             'base_uri' => $this->config['base_url'],
             'headers'  => [
@@ -27,80 +29,152 @@ class PaystackDriver implements PaymentProvider
         ]);
     }
 
-    /**
-     * Initialize a Paystack transaction.
-     * Amount MUST be in kobo. Never pass raw naira.
-     * e.g. NGN 500 = 50000 kobo
-     */
     public function initializeTransaction(array $data): array
     {
         $this->validate($data, ['email', 'amount']);
 
-        return $this->post('/transaction/initialize', [
-            'email'     => $data['email'],
-            'amount'    => $data['amount'], // kobo
-            'reference' => $data['reference'] ?? $this->generateReference(),
-            'callback_url' => $data['callback_url'] ?? null,
-            'metadata'  => $data['metadata'] ?? [],
-        ]);
+        $reference = $data['reference'] ?? $this->generateReference();
+
+        // Begin log before hitting API
+        $transaction = null;
+        if ($this->logger->isEnabled()) {
+            $transaction = $this->logger->begin(
+                category: 'payment',
+                driver: 'paystack',
+                action: 'initializeTransaction',
+                requestPayload: $data,
+                reference: $reference,
+            );
+        }
+
+        try {
+            $result = $this->post('/transaction/initialize', [
+                'email'        => $data['email'],
+                'amount'       => $data['amount'],
+                'reference'    => $reference,
+                'callback_url' => $data['callback_url'] ?? null,
+                'metadata'     => $data['metadata'] ?? [],
+            ]);
+
+            // Log success
+            if ($this->logger->isEnabled() && $transaction) {
+                $this->logger->success(
+                    transaction: $transaction,
+                    response: $result,
+                    providerReference: $result['data']['reference'] ?? null,
+                );
+            }
+
+            return $result;
+
+        } catch (FintechException $e) {
+            // Log failure
+            if ($this->logger->isEnabled() && $transaction) {
+                $this->logger->failed(
+                    transaction: $transaction,
+                    errorMessage: $e->getMessage(),
+                    errorCode: (string) $e->getCode(),
+                );
+            }
+
+            throw $e;
+        }
     }
 
-    /**
-     * Verify a transaction by reference.
-     * Always verify server-side — never trust client-side confirmation.
-     */
     public function verifyTransaction(string $reference): array
     {
-        return $this->get("/transaction/verify/{$reference}");
+        $transaction = null;
+        if ($this->logger->isEnabled()) {
+            $transaction = $this->logger->begin(
+                category: 'payment',
+                driver: 'paystack',
+                action: 'verifyTransaction',
+                requestPayload: ['reference' => $reference],
+                reference: $reference,
+            );
+        }
+
+        try {
+            $result = $this->get("/transaction/verify/{$reference}");
+
+            if ($this->logger->isEnabled() && $transaction) {
+                $status = $result['data']['status'] ?? 'pending';
+                $status === 'success'
+                    ? $this->logger->success($transaction, $result)
+                    : $this->logger->failed($transaction, 'Transaction not successful', null, $result);
+            }
+
+            return $result;
+
+        } catch (FintechException $e) {
+            if ($this->logger->isEnabled() && $transaction) {
+                $this->logger->failed($transaction, $e->getMessage(), (string) $e->getCode());
+            }
+
+            throw $e;
+        }
     }
 
-    /**
-     * Get list of all banks in Nigeria.
-     */
     public function listBanks(): array
     {
         return $this->get('/bank?currency=NGN&country=nigeria');
     }
 
-    /**
-     * Resolve a bank account number to get account name.
-     * Use this before any transfer — confirm the account exists.
-     */
     public function resolveAccount(string $accountNumber, string $bankCode): array
     {
         return $this->get("/bank/resolve?account_number={$accountNumber}&bank_code={$bankCode}");
     }
 
-    /**
-     * Initiate a transfer to a bank account.
-     * Amount in kobo.
-     */
     public function transfer(array $data): array
     {
         $this->validate($data, ['amount', 'recipient', 'reason']);
 
-        return $this->post('/transfer', [
-            'source'    => 'balance',
-            'amount'    => $data['amount'], // kobo
-            'recipient' => $data['recipient'],
-            'reason'    => $data['reason'],
-            'reference' => $data['reference'] ?? $this->generateReference(),
-        ]);
+        $reference = $data['reference'] ?? $this->generateReference();
+
+        $transaction = null;
+        if ($this->logger->isEnabled()) {
+            $transaction = $this->logger->begin(
+                category: 'payment',
+                driver: 'paystack',
+                action: 'transfer',
+                requestPayload: $data,
+                reference: $reference,
+            );
+        }
+
+        try {
+            $result = $this->post('/transfer', [
+                'source'    => 'balance',
+                'amount'    => $data['amount'],
+                'recipient' => $data['recipient'],
+                'reason'    => $data['reason'],
+                'reference' => $reference,
+            ]);
+
+            if ($this->logger->isEnabled() && $transaction) {
+                $this->logger->success($transaction, $result);
+            }
+
+            return $result;
+
+        } catch (FintechException $e) {
+            if ($this->logger->isEnabled() && $transaction) {
+                $this->logger->failed($transaction, $e->getMessage(), (string) $e->getCode());
+            }
+
+            throw $e;
+        }
     }
 
     // -------------------------------------------------------
-    // HTTP Helpers — all Paystack calls go through these
+    // HTTP Helpers
     // -------------------------------------------------------
 
     protected function post(string $endpoint, array $data): array
     {
         try {
-            $response = $this->client->post($endpoint, [
-                'json' => $data,
-            ]);
-
+            $response = $this->client->post($endpoint, ['json' => $data]);
             return $this->parse($response);
-
         } catch (GuzzleException $e) {
             throw new FintechException(
                 "Paystack POST [{$endpoint}] failed: " . $e->getMessage(),
@@ -113,9 +187,7 @@ class PaystackDriver implements PaymentProvider
     {
         try {
             $response = $this->client->get($endpoint);
-
             return $this->parse($response);
-
         } catch (GuzzleException $e) {
             throw new FintechException(
                 "Paystack GET [{$endpoint}] failed: " . $e->getMessage(),
@@ -124,10 +196,6 @@ class PaystackDriver implements PaymentProvider
         }
     }
 
-    /**
-     * Parse Paystack response into a consistent array.
-     * Every Paystack response has: status, message, data
-     */
     protected function parse($response): array
     {
         $body = json_decode($response->getBody()->getContents(), true);
@@ -145,10 +213,6 @@ class PaystackDriver implements PaymentProvider
         ];
     }
 
-    /**
-     * Simple required field validator.
-     * Throws early before hitting the API with bad data.
-     */
     protected function validate(array $data, array $required): void
     {
         foreach ($required as $field) {
@@ -160,11 +224,6 @@ class PaystackDriver implements PaymentProvider
         }
     }
 
-    /**
-     * Generate a unique transaction reference.
-     * Format: NGF-{timestamp}-{random}
-     * NGF = NgFintech
-     */
     protected function generateReference(): string
     {
         return 'NGF-' . time() . '-' . strtoupper(substr(uniqid(), -6));
