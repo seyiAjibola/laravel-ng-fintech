@@ -60,6 +60,15 @@ class FintechServiceProvider extends ServiceProvider
                 __DIR__ . '/../../config/fintech.php' => config_path('fintech.php'),
             ], 'fintech-config');
 
+            // Publish migrations — developer chooses when to run them
+            $this->publishes([
+                __DIR__ . '/../../database/migrations' => database_path('migrations'),
+            ], 'fintech-migrations');
+
+            // Auto-load migrations without publishing — optional approach
+            // Comment this out if you only want publishable migrations
+            $this->loadMigrationsFrom(__DIR__ . '/../../database/migrations');
+
         }
     }
 
